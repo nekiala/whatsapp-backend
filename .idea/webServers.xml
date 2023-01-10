@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="e7294072-6322-4449-86b5-8ded82cd52ca" name="Docker-WAB" url="http://ntpdevs.business">
+        <fileTransfer rootFolder="/home/debian/" accessType="SFTP" host="192.99.246.23" port="22" sshConfigId="c76c1718-c3dc-4a16-b895-16c38f9362d8" sshConfig="root@192.99.246.23:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

@@ -1,0 +1,39 @@
+version: '3.3'
+
+networks:
+  laravel-wab:
+    driver: bridge
+services:
+  database:
+    image: postgres
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: wab_postgres_06012022_dtb
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      -   ./postgres-data:/var/lib/postgresql/data
+    ports:
+      -   '5432:5432'
+    networks:
+      - laravel-wab
+  php-apache:
+    container_name: apache
+    build:
+      context: ./php
+    ports:
+      - '80:80'
+      - '443:443'
+      - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+    volumes:
+      - ./src:/var/www/html
+      - ./apache/ntpdevs_business.ca:/etc/ssl/certs/ntpdevs_business.ca
+      - ./apache/ntpdevs_business.crt:/etc/ssl/certs/ntpdevs_business.crt
+      - ./apache/ntpdevs_business.key:/etc/ssl/private/ntpdevs_business.key
+      - ./apache/default.conf:/etc/apache2/sites-enabled/000-default.conf
+      - ./apache/default-ssl.conf:/etc/apache2/sites-enabled/000-default-ssl.conf
+    networks:
+      - laravel-wab
+    depends_on:
+      -   database
