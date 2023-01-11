@@ -3,10 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use Adrii\Whatsapp\Whatsapp;
+use App\Enums\SessionStepEnum;
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
+use App\Models\Service;
+use App\Services\PaymentService;
+use App\Services\SessionService;
 use Exception;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Routing\ResponseFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -41,81 +47,248 @@ class WABInteractionController extends Controller
 
     public function interact(Request $request)
     {
-        Log::debug("Got a POST Ping from Whatsapp!");
+        if ($entry = $request->input('entry')) {
 
-        $graph_version    = "v15.0";
-        $phone_number_id  = config('app.wab_sender_phone_number_id');
-        $access_token     = config('app.wab_token');
-        $recipient_id     = config('app.wab_phone_number');
+            $value = $entry[0]['changes'][0]['value'];
 
-        try {
 
-            $ws = new Whatsapp(
-                $phone_number_id,
-                $access_token,
-                $graph_version
-            );
+            if (isset($value['messages'])) {
 
-            $data = $ws->getMessage($request->json());
+                //Log::debug($value);
 
-            Log::debug($data);
+                $messages = $value['messages'][0];
 
-        } catch (Exception $exception) {
+                switch ($messages['type']) {
 
-            Log::debug($exception->getMessage());
+                    case 'text':
+                        $contacts = $value['contacts'][0];
+
+                        //Log::debug("It's a text message!");
+
+                        try {
+
+                            $this->sendWelcomeMessage($contacts);
+
+                        } catch (Exception $exception) {
+
+                            Log::debug($exception->getMessage());
+                        }
+                        break;
+
+                    case 'interactive':
+
+                        try {
+
+                            $this->interactWithUser($messages);
+
+                        } catch (Exception $exception) {
+
+                            Log::debug($exception->getMessage());
+                        }
+                        break;
+                }
+
+            } else {
+
+                Log::debug($entry);
+            }
         }
 
         return "It's okay";
     }
 
-    public function send(Request $request)
+    /**
+     * @throws Exception
+     */
+    private function sendWelcomeMessage(array $contacts)
     {
-        Log::debug("Sending a POST message!");
+        $ws = new Whatsapp(
+            $this->phone_number_id,
+            $this->access_token,
+            $this->graph_version
+        );
 
-        $graph_version    = "v15.0";
-        $phone_number_id  = config('app.wab_sender_phone_number_id');
-        $access_token     = config('app.wab_token');
-        $recipient_id     = "243822178836";
+        $header_text = sprintf(
+            'Bienvenue %s !',
+            $contacts['profile']['name']
+        );
 
-        try {
+        $recipient_id = $contacts['wa_id'];
 
-            $ws = new Whatsapp(
-                $phone_number_id,
-                $access_token,
-                $graph_version
-            );
+        $customer = Customer::wherePhoneNumber($recipient_id)->first();
 
-            $button = [
-                "header" => "Header",
-                "body"   => "Body",
-                "footer" => "Footer",
-                "action" => [
-                    "buttons" => [
-                        [
-                            "type" => "reply",
-                            "reply" => [
-                                "id" => "UNIQUE_BUTTON_ID_1",
-                                "title" => "Kiala Ntona"
-                            ]
-                        ],
-                        [
-                            "type" => "reply",
-                            "reply" => [
-                                "id" => "UNIQUE_BUTTON_ID_2",
-                                "title" => "Ntona Kiala"
+        // if customer doesn't exist, let's create him
+        if (!$customer instanceof Model) {
+
+            $customer = new Customer;
+
+            $customer->phone_number = $recipient_id;
+
+        }
+
+        $customer->name = $contacts['profile']['name'];
+
+        $customer->save();
+
+        $session = SessionService::getCustomerSession($recipient_id);
+
+        if ( !$session->current_step == SessionStepEnum::INITIALIZATION->value ) {
+
+            $session->delete();
+        }
+
+        // get all services
+        $services = Service::all();
+        $rows = [];
+
+        foreach ($services as $service) {
+
+            $rows[] = [
+                "id" => sprintf('ser_%d', $service->id),
+                "title" => substr($service->name, 0, 20),
+                "description" => sprintf('%d CDF', intval($service->price))
+            ];
+        }
+
+        $list = [
+            "header" => $header_text,
+            "body" => "Choisissez le service ce que vous voulez payer. Merci d'avance !",
+            "action" => [
+                "button" => "Choisissez",
+                "sections" => [
+                    [
+                        "title" => "Payer en CDF",
+                        "rows" => $rows
+                    ]
+                ]
+            ]
+        ];
+
+        $ws->send_message()->interactive($list, $recipient_id);
+
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function interactWithUser(array $messages)
+    {
+        //Log::debug("It's an interactive message!");
+
+        $ws = new Whatsapp(
+            $this->phone_number_id,
+            $this->access_token,
+            $this->graph_version
+        );
+
+        $recipient_id = $messages['from'];
+
+        $customer = Customer::wherePhoneNumber($recipient_id)->first();
+
+        if ($customer instanceof Model) {
+
+            // check if it's a list_replay or a button_reply
+
+            if (isset($messages['interactive']['list_reply'])) {
+
+                $description = $messages['interactive']['list_reply']['description'];
+                $service_id = $messages['interactive']['list_reply']['id'];
+
+                $body_text = sprintf("Vous payez les %s via quelle méthode ?", $description);
+
+                $button = [
+                    "header" => "Méthode de paiement",
+                    "body" => $body_text,
+                    "action" => [
+                        "buttons" => [
+                            [
+                                "type" => "reply",
+                                "reply" => [
+                                    "id" => "pay_vdc.$service_id",
+                                    "title" => "M-PESA"
+                                ]
+                            ],
+                            [
+                                "type" => "reply",
+                                "reply" => [
+                                    "id" => "pay_om.$service_id",
+                                    "title" => "ORANGE MONEY"
+                                ]
                             ]
                         ]
                     ]
-                ]
-            ];
+                ];
 
-            $ws->send_message()->interactive($button, $recipient_id, "button");
+                $ws->send_message()->interactive($button, $recipient_id, "button");
 
-        } catch (Exception $exception) {
+            } elseif (isset($messages['interactive']['button_reply'])) {
 
-            Log::debug($exception->getMessage());
+                // get button id
+                $button_id = $messages['interactive']['button_reply']['id'];
+
+                $service_text = explode('.', $button_id)[1];
+                $service_id = substr($service_text, strpos($service_text, '_') + 1);
+
+                $service = Service::find($service_id);
+
+                if ($service instanceof Model) {
+
+                    $this->sendPaymentOngoingStatusText($recipient_id);
+
+                    sleep(2);
+
+                    $paymentService = new PaymentService($customer, $service);
+
+                    $this->sendPaymentStatusText($paymentService->proceed(), $recipient_id);
+
+                    $customer->session->current_step = SessionStepEnum::SESSION_COMPLETED->value;
+                    $customer->session->save();
+
+                } else {
+
+                    Log::debug("Service not found!");
+                }
+
+            }
+
+
+        } else {
+
+            Log::debug("No information about the recipient!");
         }
 
-        return "It's okay";
+
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function sendPaymentStatusText(bool $proceed, string $recipient_id)
+    {
+        $ws = new Whatsapp(
+            $this->phone_number_id,
+            $this->access_token,
+            $this->graph_version
+        );
+
+        $text = $proceed ? "Veuillez confirmer sur votre téléphone 🍍" : "Erreur de paiement survenue.";
+
+        $ws->send_message()->text($text, $recipient_id);
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function sendPaymentOngoingStatusText(string $recipient_id)
+    {
+        $ws = new Whatsapp(
+            $this->phone_number_id,
+            $this->access_token,
+            $this->graph_version
+        );
+
+        $text = "Traitement en cours...";
+
+        $ws->send_message()->text($text, $recipient_id);
     }
 }

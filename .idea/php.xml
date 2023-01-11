@@ -229,6 +229,7 @@
       <path value="$PROJECT_DIR$/src/vendor/graham-campbell/result-type" />
       <path value="$PROJECT_DIR$/src/vendor/adrii/curl-helper" />
       <path value="$PROJECT_DIR$/src/vendor/adrii/whatsapp-api" />
+      <path value="$PROJECT_DIR$/src/vendor/_laravel_idea" />
     </include_path>
   </component>
   <component name="PhpProjectSharedConfiguration" php_language_level="8.0" />

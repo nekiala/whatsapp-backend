@@ -222,4 +222,6 @@ return [
     'wab_app_id' => env('META_WA_WAB_ID'),
     'wab_token' => env('META_WA_ACCESS_TOKEN'),
 
+    'gtw_token' => env('GTW_API_TOKEN'),
+
 ];

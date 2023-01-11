@@ -18,5 +18,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::match(['get', 'post', 'put', 'patch'], 'subscribe', [\App\Http\Controllers\Api\WABInteractionController::class, 'subscribe']);
-Route::post('send', [\App\Http\Controllers\Api\WABInteractionController::class, 'send']);
+Route::get('subscribe', [\App\Http\Controllers\Api\WABInteractionController::class, 'subscribe']);
+Route::post('subscribe', [\App\Http\Controllers\Api\WABInteractionController::class, 'interact']);
+
+Route::apiResource('services', \App\Http\Controllers\Api\ServiceController::class);
+
+Route::match(['get', 'post'], 'payment-status/{id}', [\App\Http\Controllers\Api\PaymentController::class, 'callback']);

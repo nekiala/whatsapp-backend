@@ -232,6 +232,7 @@
       <excludeFolder url="file://$MODULE_DIR$/src/vendor/graham-campbell/result-type" />
       <excludeFolder url="file://$MODULE_DIR$/src/vendor/adrii/curl-helper" />
       <excludeFolder url="file://$MODULE_DIR$/src/vendor/adrii/whatsapp-api" />
+      <excludeFolder url="file://$MODULE_DIR$/src/vendor/_laravel_idea" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
